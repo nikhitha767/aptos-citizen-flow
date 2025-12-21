@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Building2, Scale, History, LogOut, Menu, X } from 'lucide-react';
 import Logo from './Logo';
 import GlowingButton from './ui/GlowingButton';
+import ThemeToggle from './ThemeToggle';
 import { useWallet } from '@/contexts/WalletContext';
 
 const Navbar: React.FC = () => {
@@ -60,7 +61,7 @@ const Navbar: React.FC = () => {
             ))}
           </div>
 
-          {/* Wallet Info & Disconnect */}
+          {/* Wallet Info, Theme Toggle & Disconnect */}
           <div className="hidden md:flex items-center gap-4">
             {walletAddress && (
               <div className="glass px-3 py-1.5 rounded-lg text-sm">
@@ -70,6 +71,7 @@ const Navbar: React.FC = () => {
                 </span>
               </div>
             )}
+            <ThemeToggle />
             <GlowingButton
               variant="secondary"
               size="sm"
@@ -121,6 +123,10 @@ const Navbar: React.FC = () => {
                   Wallet: <span className="text-primary font-mono">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</span>
                 </div>
               )}
+              <div className="flex items-center justify-between px-4 py-3 border-t border-glass-border/30">
+                <span className="text-sm text-muted-foreground">Theme</span>
+                <ThemeToggle />
+              </div>
               <button
                 onClick={handleDisconnect}
                 className="flex items-center gap-3 px-4 py-3 text-destructive"
