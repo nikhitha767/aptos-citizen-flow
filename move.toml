@@ -1,0 +1,14 @@
+[package]
+name = "CitizenFlowVersion"
+version = "1.0.0"
+authors = []
+
+[addresses]
+citizen_flow_v14 = "0x9af8e9a0dc88c34f05dd66f7f297695e01f2706c34fee699a9b24a6627ed77e9"
+
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-framework", rev = "mainnet" }
+AptosToken = { git = "https://github.com/aptos-labs/aptos-core.git", subdir = "aptos-move/framework/aptos-token", rev = "mainnet" }
+
+[dev-dependencies]

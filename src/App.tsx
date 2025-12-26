@@ -8,6 +8,7 @@ import { WalletProvider, useWallet } from "./contexts/WalletContext";
 import ConnectWallet from "./pages/ConnectWallet";
 import Home from "./pages/Home";
 import ComplaintPage from "./pages/ComplaintPage";
+import PoliceStationPage from "./pages/PoliceStationPage";
 import AdvocatesPage from "./pages/AdvocatesPage";
 import HistoryPage from "./pages/HistoryPage";
 import NotFound from "./pages/NotFound";
@@ -17,11 +18,11 @@ const queryClient = new QueryClient();
 // Protected Route component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isConnected } = useWallet();
-  
+
   if (!isConnected) {
     return <Navigate to="/" replace />;
   }
-  
+
   return <>{children}</>;
 };
 
@@ -33,6 +34,7 @@ const AppRoutes = () => {
       <Route path="/" element={isConnected ? <Navigate to="/home" replace /> : <ConnectWallet />} />
       <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
       <Route path="/complaint" element={<ProtectedRoute><ComplaintPage /></ProtectedRoute>} />
+      <Route path="/police-station" element={<ProtectedRoute><PoliceStationPage /></ProtectedRoute>} />
       <Route path="/advocates" element={<ProtectedRoute><AdvocatesPage /></ProtectedRoute>} />
       <Route path="/history" element={<ProtectedRoute><HistoryPage /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />

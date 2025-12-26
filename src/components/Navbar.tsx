@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Building2, Scale, History, LogOut, Menu, X } from 'lucide-react';
+import { Building2, Scale, History, LogOut, Menu, X, Shield } from 'lucide-react';
 import Logo from './Logo';
 import GlowingButton from './ui/GlowingButton';
 import ThemeToggle from './ThemeToggle';
@@ -15,6 +15,7 @@ const Navbar: React.FC = () => {
 
   const navItems = [
     { label: 'Stations', icon: Building2, path: '/home' },
+    { label: 'Police Station', icon: Shield, path: '/police-station' },
     { label: 'Advocates', icon: Scale, path: '/advocates' },
     { label: 'History', icon: History, path: '/history' },
   ];
@@ -34,8 +35,8 @@ const Navbar: React.FC = () => {
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <div 
-            className="cursor-pointer" 
+          <div
+            className="cursor-pointer"
             onClick={() => navigate('/home')}
           >
             <Logo size="md" />
@@ -49,11 +50,10 @@ const Navbar: React.FC = () => {
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={() => navigate(item.path)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                  location.pathname === item.path
-                    ? 'bg-primary/10 text-primary border border-primary/30'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
-                }`}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 ${location.pathname === item.path
+                  ? 'bg-primary/10 text-primary border border-primary/30'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
+                  }`}
               >
                 <item.icon size={18} />
                 {item.label}
@@ -108,11 +108,10 @@ const Navbar: React.FC = () => {
                     navigate(item.path);
                     setMobileMenuOpen(false);
                   }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${
-                    location.pathname === item.path
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground'
-                  }`}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${location.pathname === item.path
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-muted-foreground'
+                    }`}
                 >
                   <item.icon size={20} />
                   {item.label}
