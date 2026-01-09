@@ -1,4 +1,4 @@
-module citizen_flow_v14::citizen_flow_v16 {
+module citizen_flow_v18::citizen_flow_v18 {
     use std::string::{Self, String};
     use std::signer;
     use std::vector;

@@ -27,7 +27,7 @@ const ParticleBackground: React.FC = () => {
 
     const createParticles = () => {
       particles = [];
-      const count = Math.floor((canvas.width * canvas.height) / 15000);
+      const count = Math.floor((canvas.width * canvas.height) / 25000);
       for (let i = 0; i < count; i++) {
         particles.push({
           x: Math.random() * canvas.width,
@@ -43,7 +43,8 @@ const ParticleBackground: React.FC = () => {
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      particles.forEach((particle, i) => {
+      for (let i = 0; i < particles.length; i++) {
+        const particle = particles[i];
         particle.x += particle.vx;
         particle.y += particle.vy;
 
@@ -56,7 +57,8 @@ const ParticleBackground: React.FC = () => {
         ctx.fill();
 
         // Draw connections
-        particles.slice(i + 1).forEach((other) => {
+        for (let j = i + 1; j < particles.length; j++) {
+          const other = particles[j];
           const dx = particle.x - other.x;
           const dy = particle.y - other.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
@@ -69,8 +71,8 @@ const ParticleBackground: React.FC = () => {
             ctx.lineWidth = 0.5;
             ctx.stroke();
           }
-        });
-      });
+        }
+      }
 
       animationId = requestAnimationFrame(animate);
     };

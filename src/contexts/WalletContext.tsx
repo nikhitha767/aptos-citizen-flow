@@ -4,6 +4,7 @@ import { AptosWalletAdapterProvider, useWallet as useAptosWallet } from "@aptos-
 interface WalletContextType {
   isConnected: boolean;
   account: any | null;
+  network: any | null;
   walletAddress: string | null;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
@@ -13,7 +14,7 @@ interface WalletContextType {
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 const InnerWalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { account, connected, connect, disconnect, signAndSubmitTransaction: aptosSignAndSubmit } = useAptosWallet();
+  const { account, connected, network, connect, disconnect, signAndSubmitTransaction: aptosSignAndSubmit } = useAptosWallet();
 
   const connectWallet = useCallback(async () => {
     try {
@@ -62,6 +63,7 @@ const InnerWalletProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <WalletContext.Provider value={{
       isConnected: connected,
       account,
+      network,
       walletAddress,
       connectWallet,
       disconnectWallet,

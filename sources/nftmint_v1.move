@@ -1,10 +1,14 @@
-module citizen_flow_v14::nft_mint {
+module citizen_flow_v18::nft_mint_v18 {
     use std::string::{Self, String};
     use std::signer;
     use std::vector;
+
     use aptos_token::token;
     use aptos_framework::event;
-    use citizen_flow_v14::citizen_flow_v16 as citizen_flow;
+
+    use citizen_flow_v18::citizen_flow_v18 as citizen_flow;
+
+    const COLLECTION_NAME: vector<u8> = b"Citizen Flow Receipts";
 
     struct NFTReceipt has store, drop, copy {
         complaint_id: u64,
@@ -25,6 +29,32 @@ module citizen_flow_v14::nft_mint {
         token_name: String,
         image_uri: String,
     }
+
+    /// Initialize the collection if it doesn't exist
+    public entry fun create_collection_if_missing(account: &signer) {
+        let collection_name = string::utf8(COLLECTION_NAME);
+        let collection_description = string::utf8(b"Official receipts for complaints submitted via Citizen Flow.");
+        let collection_uri = string::utf8(b"https://move-book.com/img/aptos-logo.png"); 
+        
+        let mutate_setting = vector::empty<bool>();
+        vector::push_back(&mut mutate_setting, false); // description
+        vector::push_back(&mut mutate_setting, false); // uri
+        vector::push_back(&mut mutate_setting, false); // maximum
+
+        let account_addr = signer::address_of(account);
+        if (!token::check_collection_exists(account_addr, collection_name)) {
+            token::create_collection(
+                account,
+                collection_name,
+                collection_description,
+                collection_uri,
+                0, // maximum supply
+                mutate_setting,
+            );
+        };
+    }
+
+   
 
     /// Mint an NFT proof receipt with custom metadata URI as a Standard Aptos Token
     public entry fun mint_proof_with_metadata(
@@ -47,6 +77,7 @@ module citizen_flow_v14::nft_mint {
         let account_addr = signer::address_of(account);
         
         // Fetch latest complaint from the main module for ID
+
         // Note: usage of citizen_flow::get_complaints is now optional/validating
         // To fix simulation error (where no state exists), we handle the empty case
         
@@ -65,6 +96,8 @@ module citizen_flow_v14::nft_mint {
         let token_name = string::utf8(b"Complaint Receipt #");
         let complaint_id_str = u64_to_string(complaint_id);
         string::append(&mut token_name, complaint_id_str);
+        string::append(&mut token_name, string::utf8(b" - ")); 
+        string::append(&mut token_name, category);
         
         let token_description = string::utf8(b"Official proof of complaint submission - ");
         string::append(&mut token_description, category);
@@ -74,7 +107,8 @@ module citizen_flow_v14::nft_mint {
         string::append(&mut token_description, incident_date);
 
         // --- Standard Aptos Token Logic ---
-        let collection_name = string::utf8(b"Citizen Flow Receipts");
+        // --- Standard Aptos Token Logic ---
+        let collection_name = string::utf8(COLLECTION_NAME);
         let collection_description = string::utf8(b"Official receipts for complaints submitted via Citizen Flow.");
         let collection_uri = string::utf8(b"https://move-book.com/img/aptos-logo.png"); 
         

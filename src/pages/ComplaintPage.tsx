@@ -33,6 +33,12 @@ const problemCategories = [
   { id: 'other', label: 'Other', icon: FileText, color: 'text-purple-400' },
 ];
 
+const MODULE_ADDRESS = (() => {
+  const envKey = import.meta.env.VITE_APTOS_PRIVATE_KEY;
+  if (!envKey) return "0x9af8e9a0dc88c34f05dd66f7f297695e01f2706c34fee699a9b24a6627ed77e9";
+  return envKey.startsWith("0x") ? envKey : `0x${envKey}`;
+})();
+
 const ComplaintPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -52,6 +58,8 @@ const ComplaintPage: React.FC = () => {
     description: '',
     witnesses: '',
   });
+  // State to hold complaint data for the duration of the session (between steps)
+  const [lastSubmitted, setLastSubmitted] = useState<any>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -59,6 +67,8 @@ const ComplaintPage: React.FC = () => {
   const [isMinted, setIsMinted] = useState(false);
   const [nftTxHash, setNftTxHash] = useState<string>('');
   const [complaintTxHash, setComplaintTxHash] = useState<string>('');
+  const [nftMetadataCid, setNftMetadataCid] = useState<string>('');
+  const [nftMetadataUri, setNftMetadataUri] = useState<string>('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -74,7 +84,7 @@ const ComplaintPage: React.FC = () => {
     setUploadedFiles(uploadedFiles.filter((_, i) => i !== index));
   };
 
-  const { signAndSubmitTransaction, account } = useWallet();
+  const { signAndSubmitTransaction, account, walletAddress } = useWallet();
 
   const uploadToPinata = async (file: File) => {
     const formData = new FormData();
@@ -131,7 +141,7 @@ const ComplaintPage: React.FC = () => {
       // 2. Submit to Blockchain (Complaint Only)
       const payload = {
         data: {
-          function: "0x9af8e9a0dc88c34f05dd66f7f297695e01f2706c34fee699a9b24a6627ed77e9::citizen_flow_v13::submit_complaint",
+          function: `${MODULE_ADDRESS}::citizen_flow_v17::submit_complaint`,
           typeArguments: [],
           functionArguments: [
             station.name,                           // station
@@ -155,6 +165,24 @@ const ComplaintPage: React.FC = () => {
       const response = await signAndSubmitTransaction(payload);
       console.log("Complaint Submitted:", response.hash);
 
+      // Record Complaint Evidence to Backend
+      try {
+        await axios.post('http://127.0.0.1:5000/api/record-evidence', {
+          transactionHash: response.hash,
+          ipfsCid: evidenceString || "None",
+          ipfsUrl: cids.length > 0 ? `https://gateway.pinata.cloud/ipfs/${cids[0]}` : "",
+          metadataUri: "",
+          station: station.name,
+          category: selectedCategory || "other",
+          walletAddress: walletAddress || "",
+          status: "pending",
+          formData: formData
+        });
+        console.log("Complaint evidence recorded in MongoDB");
+      } catch (err) {
+        console.error("Failed to record complaint evidence:", err);
+      }
+
       // 3. Save to localStorage
       const complaintId = `C-${Date.now()}`;
       const complaint = {
@@ -169,14 +197,24 @@ const ComplaintPage: React.FC = () => {
         timestamp: Date.now()
       };
 
-      // Get existing complaints and add new one
-      const existingComplaints = localStorage.getItem('complaints');
-      const complaints = existingComplaints ? JSON.parse(existingComplaints) : [];
-      complaints.push(complaint);
-      localStorage.setItem('complaints', JSON.stringify(complaints));
+      // Store the current complaint ID for NFT minting (if needed by context, else remove)
+      // Actually we can just keep complaintId in memory or pass via state, but existing logic might rely on it.
+      // However, the user wants MongoDB ONLY display.
+      // Let's remove the complaints array storage but keeping 'currentComplaintId' might be safe for transient use if other parts use it.
+      // But ideally we remove all.
 
-      // Store the current complaint ID for NFT minting
-      localStorage.setItem('currentComplaintId', complaintId);
+      console.log("Complaint processed.");
+
+      const complaintData = {
+        id: complaintId,
+        station: station.name,
+        category: selectedCategory || "other",
+        date: new Date().toLocaleDateString(),
+        formData: formData,
+        evidenceCids: evidenceString,
+        txHash: response.hash
+      };
+      setLastSubmitted(complaintData);
 
       setComplaintTxHash(response.hash);
       setIsSubmitting(false);
@@ -207,26 +245,11 @@ const ComplaintPage: React.FC = () => {
   const handleMintNft = async () => {
     setIsMinting(true);
     try {
-      // Get the current complaint data from localStorage
-      const currentComplaintId = localStorage.getItem('currentComplaintId');
-      if (!currentComplaintId) {
-        alert("No complaint found to mint NFT for.");
-        setIsMinting(false);
-        return;
-      }
-
-      const existingComplaints = localStorage.getItem('complaints');
-      if (!existingComplaints) {
-        alert("No complaints found.");
-        setIsMinting(false);
-        return;
-      }
-
-      const complaints = JSON.parse(existingComplaints);
-      const complaint = complaints.find((c: any) => c.id === currentComplaintId);
+      // Get the current complaint data from State
+      const complaint = lastSubmitted;
 
       if (!complaint) {
-        alert("Complaint not found.");
+        alert("No complaint found to mint NFT for. Please submit a complaint first.");
         setIsMinting(false);
         return;
       }
@@ -300,11 +323,67 @@ const ComplaintPage: React.FC = () => {
       console.log("Metadata uploaded to IPFS:", metadataUri);
       console.log("Metadata CID:", metadataCid);
 
-      // Mint NFT with metadata URI
+      // Smart Logic: Check if collection exists to determine needed steps
+      let collectionExists = false;
+      try {
+        if (!account?.address) throw new Error("Wallet not connected");
+        console.log("Checking for collection existence...");
+
+        // 1. Get Collections resource to find the table handle
+        const resourceRes = await axios.get(
+          `https://fullnode.testnet.aptoslabs.com/v1/accounts/${account.address}/resource/0x3::token::Collections`
+        );
+        const handle = resourceRes.data.data.collection_data.handle;
+
+        // 2. Query the table for our specific collection name
+        const tableItemPayload = {
+          key_type: "0x1::string::String",
+          value_type: "0x3::token::CollectionData",
+          key: "Citizen Flow Receipts"
+        };
+
+        await axios.post(
+          `https://fullnode.testnet.aptoslabs.com/v1/tables/${handle}/item`,
+          tableItemPayload
+        );
+        collectionExists = true;
+        console.log("Collection already exists. Skipping creation.");
+      } catch (e) {
+        console.log("Collection check failed or not found (proceeding to create):", e);
+        collectionExists = false;
+      }
+
+      // Step 1: Create Collection (Only if missing)
+      if (!collectionExists) {
+        console.log("Creating collection via standard script...");
+        const createCollectionPayload = {
+          data: {
+            function: "0x3::token::create_collection_script",
+            typeArguments: [],
+            functionArguments: [
+              "Citizen Flow Receipts", // name
+              "Official receipts for complaints submitted via Citizen Flow.", // description
+              "https://move-book.com/img/aptos-logo.png", // uri
+              "0", // maximum supply (as string for u64 sometimes better in SDK, but number works)
+              [false, false, false] // mutate_setting
+            ]
+          }
+        };
+        try {
+          await signAndSubmitTransaction(createCollectionPayload);
+          console.log("Collection creation transaction submitted.");
+        } catch (e) {
+          console.warn("User maybe rejected creation, or error:", e);
+          // If setup failed, mint checks might fail. 
+          throw e;
+        }
+      }
+
+      // Step 2: Mint NFT
       const evidenceCidsString = evidenceCids.join(",");
       const payload = {
         data: {
-          function: "0x9af8e9a0dc88c34f05dd66f7f297695e01f2706c34fee699a9b24a6627ed77e9::nft_mint::mint_proof_with_metadata",
+          function: `${MODULE_ADDRESS}::nft_mint_v17::mint_proof_with_metadata`,
           typeArguments: [],
           functionArguments: [
             complaint.station,                       // station
@@ -330,17 +409,34 @@ const ComplaintPage: React.FC = () => {
       console.log("NFT Minted:", response.hash);
       console.log("View your NFT metadata at:", metadataUri);
 
-      // Update the complaint in localStorage with NFT transaction hash and metadata
-      const complaintIndex = complaints.findIndex((c: any) => c.id === currentComplaintId);
-      if (complaintIndex !== -1) {
-        complaints[complaintIndex].nftTxHash = response.hash;
-        complaints[complaintIndex].nftMetadataUri = metadataUri;
-        complaints[complaintIndex].nftMetadataCid = metadataCid;
-        localStorage.setItem('complaints', JSON.stringify(complaints));
-      }
-      localStorage.removeItem('currentComplaintId');
+      // Update backend if needed (Store NFT details)
+      // Note: We don't save to localStorage anymore.
 
       setNftTxHash(response.hash);
+      setNftMetadataCid(metadataCid);
+      setNftMetadataUri(metadataUri);
+
+      // Record Evidence to Backend (Update the existing record with NFT info)
+      try {
+        await axios.post('http://127.0.0.1:5000/api/update-complaint', {
+          id: complaint.txHash, // Use txHash as ID
+          nftTxHash: response.hash,
+          notify: true, // Trigger email notification
+          updates: {
+            date: new Date().toLocaleDateString(),
+            message: `NFT Receipt Minted successfully! Transaction Hash: ${response.hash}`
+          }
+        });
+
+        // Also original method if required for compatibility, but updated logic uses update-complaint
+        // Keeping original 'record-evidence' call just for redundancy/logging or removing if update-complaint covers it.
+        // The original code was creating a NEW record? No, it seemed to be logging evidence.
+        // Let's rely on update-complaint.
+        console.log("Evidence recorded in MongoDB");
+      } catch (err) {
+        console.error("Failed to record evidence:", err);
+      }
+
       setIsMinting(false);
       setIsMinted(true);
     } catch (error) {
@@ -501,6 +597,37 @@ const ComplaintPage: React.FC = () => {
                   <p className="text-xs text-muted-foreground">
                     Your NFT metadata is stored on IPFS and accessible via the blockchain.
                   </p>
+                </div>
+
+                {/* IPFS Info */}
+                <div className="glass rounded-lg p-4">
+                  <p className="text-sm text-muted-foreground mb-3">IPFS Evidence Identifier (CID)</p>
+                  <div className="flex items-center gap-2 mb-3">
+                    <code className="flex-1 text-xs bg-secondary px-3 py-2 rounded font-mono break-all">
+                      {nftMetadataCid || "Qm..."}
+                    </code>
+                    <button
+                      onClick={() => {
+                        if (nftMetadataCid) {
+                          navigator.clipboard.writeText(nftMetadataCid);
+                          alert('CID copied to clipboard!');
+                        }
+                      }}
+                      className="p-2 hover:bg-primary/20 rounded-lg transition-colors"
+                      title="Copy CID"
+                    >
+                      <Copy className="text-primary" size={18} />
+                    </button>
+                  </div>
+                  <a
+                    href={nftMetadataUri || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors text-primary text-sm font-medium"
+                  >
+                    <ExternalLink size={16} />
+                    View Metadata on IPFS
+                  </a>
                 </div>
               </div>
 
